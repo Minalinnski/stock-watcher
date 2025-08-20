@@ -15,10 +15,8 @@ load_dotenv()
 
 app = FastAPI(title="AB Watch Dashboard")
 
-# 静态文件服务 - 前后端一体化
+# 静态文件服务 - 前后端一体化 (在API路由之后挂载)
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
-app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 # CORS (现在主要用于开发)
 origins = os.getenv("CORS_ORIGINS","").split(",") if os.getenv("CORS_ORIGINS") else ["*"]
@@ -43,7 +41,7 @@ def on_shutdown():
 def list_watchlist():
     db = SessionLocal()
     try:
-        items = db.execute(select(WatchItem)).scalars().all()
+        items = db.execute(select(WatchItem).order_by(WatchItem.display_order)).scalars().all()
         return [{"symbol": w.symbol, "name": w.name} for w in items]
     finally:
         db.close()
@@ -143,3 +141,7 @@ def api_quote(symbol: str):
 @app.get("/api/chart/{symbol}", response_model=ChartOut)
 def api_chart(symbol: str, period: str="1d", interval: str="1m"):
     return get_intraday_points(symbol, period=period, interval=interval)
+
+# 在所有API路由定义完成后挂载静态文件
+app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

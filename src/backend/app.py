@@ -123,14 +123,10 @@ def get_ab(symbol: str):
             )
             db.add(obj); db.commit(); db.refresh(obj)
         
-        # 兼容旧版本API字段
-        last_two_actions = (obj.signal_history or [])[:2] if obj.signal_history else []
-        
         return {
             "symbol": obj.symbol,
             "suggestion": obj.suggestion,
             "signal_history": obj.signal_history or [],
-            "last_two_actions": last_two_actions,  # 保持向后兼容
             "summary": obj.summary,
             "technical_indicators": obj.technical_indicators or {},
             "price_target": obj.price_target,

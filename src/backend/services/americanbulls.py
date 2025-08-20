@@ -164,15 +164,11 @@ def fetch_ab_for_symbol(symbol: str) -> Dict[str, Any]:
         suggestion, summary, technical_indicators, price_target = parse_suggestion_and_details(soup)
         signal_history = parse_signal_history(soup)
         
-        # 兼容旧版本API
-        last_two_actions = signal_history[:2] if signal_history else []
-        
         result = {
             "symbol": symbol,
             "suggestion": suggestion,
             "summary": summary,
             "signal_history": signal_history,
-            "last_two_actions": last_two_actions,  # 保持向后兼容
             "technical_indicators": technical_indicators,
             "price_target": price_target,
             "data_source": "americanbulls.com",
@@ -189,7 +185,6 @@ def fetch_ab_for_symbol(symbol: str) -> Dict[str, Any]:
             "suggestion": None,
             "summary": f"网络错误: {str(e)[:100]}",
             "signal_history": [],
-            "last_two_actions": [],
             "technical_indicators": {},
             "price_target": None,
             "error": str(e)
@@ -201,7 +196,6 @@ def fetch_ab_for_symbol(symbol: str) -> Dict[str, Any]:
             "suggestion": None,
             "summary": f"解析错误: {str(e)[:100]}",
             "signal_history": [],
-            "last_two_actions": [],
             "technical_indicators": {},
             "price_target": None,
             "error": str(e)

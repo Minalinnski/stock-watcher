@@ -94,11 +94,6 @@ async function loadWatch() {
           `<small class="signal-item">${sig.date} ${sig.signal}</small>`
         ).join('');
         historyDiv.innerHTML = historyHtml;
-      } else if (ab.last_two_actions && ab.last_two_actions.length > 0) {
-        const historyHtml = ab.last_two_actions.map(sig => 
-          `<small class="signal-item">${sig.date} ${sig.signal}</small>`
-        ).join('');
-        historyDiv.innerHTML = historyHtml;
       }
       
       // 点击行打开详情

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, JSON, Float, UniqueConstraint
 from sqlalchemy.sql import func
-from .db import Base
+from db import Base
 
 class WatchItem(Base):
     __tablename__ = "watchlist"

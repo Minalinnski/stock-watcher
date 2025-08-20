@@ -13,11 +13,18 @@ class ABAction(BaseModel):
     date: str
     signal: str
 
+class SignalHistoryItem(BaseModel):
+    date: str
+    signal: str
+    price: Optional[str] = None
+
 class ABSignalOut(BaseModel):
     symbol: str
     suggestion: Optional[str]
-    last_two_actions: List[ABAction] = Field(default_factory=list)
+    signal_history: List[SignalHistoryItem] = Field(default_factory=list)
     summary: Optional[str] = None
+    technical_indicators: dict = Field(default_factory=dict)
+    price_target: Optional[str] = None
     updated_at: Optional[str] = None
 
 class QuoteOut(BaseModel):

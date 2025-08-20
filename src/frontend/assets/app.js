@@ -137,6 +137,34 @@ async function removeStock(symbol) {
   }
 }
 
+async function refreshPricesOnly() {
+  const rows = tbody.querySelectorAll('tr');
+  
+  for (const row of rows) {
+    const symbolElement = row.querySelector('.symbol-info b');
+    if (!symbolElement) continue;
+    
+    const symbol = symbolElement.textContent;
+    
+    try {
+      // 只更新价格数据，不重新加载图表
+      const quote = await jget(`/api/quote/${symbol}`);
+      
+      row.querySelector('.price').textContent = quote.price ? `$${quote.price}` : '-';
+      const changeCell = row.querySelector('.chg');
+      if (quote.change !== null) {
+        changeCell.innerHTML = `<span class="${pctClass(quote.change)}">${quote.change > 0 ? '+' : ''}${quote.change}%</span>`;
+      } else {
+        changeCell.textContent = '-';
+      }
+      row.querySelector('.volume').textContent = quote.volume ? formatVolume(quote.volume) : '-';
+      
+    } catch (error) {
+      console.warn(`Failed to refresh price for ${symbol}:`, error);
+    }
+  }
+}
+
 async function openModal(symbol){
   const [q, ab, ch] = await Promise.all([
     jget(`/api/quote/${symbol}`),
@@ -174,6 +202,17 @@ document.getElementById('add-form').addEventListener('submit', async (e)=>{
   loadWatch();
 });
 
-// 初次 & 轮询（价格/图每 60s 刷新；AB 由后端定时跑）
+// 初次加载
 loadWatch();
-setInterval(loadWatch, 60_000);
+
+// 价格数据每5分钟刷新一次（配合后端缓存）
+setInterval(() => {
+  console.log('Refreshing price data...');
+  refreshPricesOnly();
+}, 5 * 60 * 1000);
+
+// 完整数据每15分钟刷新一次
+setInterval(() => {
+  console.log('Full data refresh...');
+  loadWatch();
+}, 15 * 60 * 1000);

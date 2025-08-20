@@ -7,7 +7,7 @@ from sqlalchemy import select, delete, update, func
 from .db import Base, engine, SessionLocal
 from .models import WatchItem, ABSignalCache, StockQuoteCache
 from .schemas import WatchCreate, WatchItemOut, ABSignalOut, QuoteOut, ChartOut
-from .services.prices import get_quote, get_intraday_points, validate_symbol
+from .services.prices import get_quote, get_intraday_points, validate_symbol, get_symbol_info
 from .scheduler import create_scheduler
 from dotenv import load_dotenv
 
@@ -52,23 +52,31 @@ def add_watch(item: WatchCreate):
     if not sym:
         raise HTTPException(400, "symbol required")
     
-    # 验证股票代码 (暂时跳过以便测试)
-    # if not validate_symbol(sym):
-    #     raise HTTPException(400, f"Invalid stock symbol: {sym}")
+    # 使用AmericanBulls验证股票代码并获取公司名称
+    symbol_info = get_symbol_info(sym)
+    if not symbol_info.get("valid", False):
+        raise HTTPException(400, f"Stock symbol '{sym}' not found on AmericanBulls")
+    
+    # 使用从AB获取的公司名称，如果用户没有提供的话
+    company_name = item.name or symbol_info.get("name") or sym
     
     db = SessionLocal()
     try:
         exists = db.execute(select(WatchItem).where(WatchItem.symbol==sym)).scalar_one_or_none()
         if exists:
+            # 如果存在但名称为空，更新名称
+            if not exists.name and company_name:
+                exists.name = company_name
+                db.commit()
             return {"symbol": exists.symbol, "name": exists.name}
         
         # 获取最大排序值
         max_order = db.execute(select(func.max(WatchItem.display_order))).scalar() or 0
         
-        obj = WatchItem(symbol=sym, name=item.name, display_order=max_order + 1)
+        obj = WatchItem(symbol=sym, name=company_name, display_order=max_order + 1)
         db.add(obj)
         db.commit()
-        return {"symbol": sym, "name": item.name}
+        return {"symbol": sym, "name": company_name}
     finally:
         db.close()
 

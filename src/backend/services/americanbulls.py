@@ -12,6 +12,7 @@ HEADERS = {
 }
 
 BASE = "https://www.americanbulls.com/SignalPage.aspx?lang=en&Ticker={symbol}"
+SEARCH_BASE = "https://www.americanbulls.com/SearchList.aspx?lang=en&SearchText={symbol}"
 
 def parse_signal_history(soup) -> List[Dict[str, str]]:
     """从 'Signal History' 表格抓取更多历史记录"""
@@ -200,3 +201,214 @@ def fetch_ab_for_symbol(symbol: str) -> Dict[str, Any]:
             "price_target": None,
             "error": str(e)
         }
+
+def validate_symbol_and_get_name(symbol: str) -> Dict[str, Any]:
+    """使用AmericanBulls验证股票代码并获取公司名称"""
+    symbol = symbol.upper().strip()
+    
+    try:
+        # 首先尝试直接访问股票页面
+        url = BASE.format(symbol=symbol)
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # 检查页面是否包含有效的股票信息
+            page_text = soup.get_text()
+            
+            # 检查页面是否包含股票特征信息
+            has_stock_info = any([
+                symbol in page_text.upper(),
+                "STAY LONG" in page_text,
+                "BUY" in page_text,
+                "SELL" in page_text,
+                "Close" in page_text and "Prev.Close" in page_text,
+                "NASDAQ" in page_text or "NYSE" in page_text or "AMEX" in page_text
+            ])
+            
+            if not has_stock_info or len(page_text) < 10000:
+                # 页面没有股票信息或内容太少
+                logger.warning(f"Invalid stock page for {symbol}, content length: {len(page_text)}")
+                return {"valid": False, "symbol": symbol, "name": None}
+            
+            # 尝试提取公司名称
+            company_name = extract_company_name(soup, symbol)
+            
+            logger.info(f"Symbol {symbol} validated successfully via direct access")
+            return {
+                "valid": True,
+                "symbol": symbol,
+                "name": company_name
+            }
+            
+    except requests.RequestException as e:
+        logger.warning(f"Direct access failed for {symbol}: {e}")
+    
+    # 如果直接访问失败，尝试搜索
+    try:
+        search_url = SEARCH_BASE.format(symbol=symbol)
+        response = requests.get(search_url, headers=HEADERS, timeout=15)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+            # 检查搜索结果
+            search_results = parse_search_results(soup, symbol)
+            
+            if search_results:
+                logger.info(f"Symbol {symbol} found via search")
+                return {
+                    "valid": True,
+                    "symbol": symbol,
+                    "name": search_results.get("name")
+                }
+            else:
+                logger.info(f"Symbol {symbol} not found in search results")
+                return {"valid": False, "symbol": symbol, "name": None}
+                
+    except requests.RequestException as e:
+        logger.error(f"Search failed for {symbol}: {e}")
+        return {"valid": False, "symbol": symbol, "name": None}
+    
+    return {"valid": False, "symbol": symbol, "name": None}
+
+def extract_company_name(soup, symbol: str) -> Optional[str]:
+    """从股票页面提取公司名称"""
+    try:
+        page_text = soup.get_text()
+        
+        # 方法1: 从页面文本中查找公司名称模式
+        # 基于观察到的结构：AAPL (NASDAQ) 后面跟着 Apple Inc
+        lines = [line.strip() for line in page_text.split('\n') if line.strip()]
+        
+        for i, line in enumerate(lines):
+            # 查找包含股票代码和交易所的行，格式如 "AAPL  NASDAQ"
+            if (symbol in line and 
+                any(exchange in line for exchange in ['NASDAQ', 'NYSE', 'AMEX']) and
+                len(line.split()) <= 3):  # 避免匹配到其他包含代码的长行
+                
+                # 检查下一行是否是公司名称
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    
+                    # 过滤掉常见的页面元素和信号
+                    excluded_phrases = [
+                        'Cookie Consent', 'Privacy Policy', 'americanbulls', 'Register', 'Sign In',
+                        'STAY LONG', 'BUY', 'SELL', 'SHORT', 'Close', 'Open', 'High', 'Low',
+                        'Prev.Close', 'Change', 'Change%', 'Volume', 'EN', 'English'
+                    ]
+                    
+                    # 公司名称的特征：长度合适，不是数字，不是排除的短语
+                    if (3 < len(next_line) < 100 and 
+                        next_line != symbol and 
+                        not next_line.replace('.', '').replace('-', '').isdigit() and
+                        not any(phrase.lower() in next_line.lower() for phrase in excluded_phrases)):
+                        
+                        logger.info(f"Found company name for {symbol}: {next_line}")
+                        return next_line
+        
+        # 方法2: 从标题提取
+        title_tag = soup.find("title")
+        if title_tag:
+            title = title_tag.get_text().strip()
+            # 标题格式如 "AAPL (NASDAQ)"
+            if symbol in title and "(" in title:
+                # 有时候标题之后会有公司名
+                title_clean = title.replace(f"{symbol}", "").replace("(NASDAQ)", "").replace("(NYSE)", "").replace("(AMEX)", "").strip()
+                if title_clean and len(title_clean) > 3:
+                    return title_clean
+        
+        # 方法3: 查找包含常见公司后缀的文本
+        company_suffixes = ['Inc', 'Corp', 'Corporation', 'Company', 'Co', 'Ltd', 'LLC', 'Technologies', 'Systems']
+        for line in lines:
+            line_clean = line.strip()
+            if (any(suffix in line_clean for suffix in company_suffixes) and 
+                symbol not in line_clean and 
+                len(line_clean) > 5 and len(line_clean) < 100):
+                return line_clean
+        
+        # 方法4: 查找位于股票代码附近的可能的公司名
+        text_parts = page_text.split()
+        for i, part in enumerate(text_parts):
+            if part == symbol:
+                # 查看前后几个词
+                for offset in [1, 2, 3, -1, -2, -3]:
+                    if 0 <= i + offset < len(text_parts):
+                        candidate = text_parts[i + offset]
+                        if (len(candidate) > 3 and 
+                            candidate not in ['NASDAQ', 'NYSE', 'AMEX', 'Close', 'Open', 'High', 'Low'] and
+                            not candidate.replace('.', '').isdigit()):
+                            # 可能找到了公司名的一部分，尝试获取更多上下文
+                            start = max(0, i + offset - 2)
+                            end = min(len(text_parts), i + offset + 3)
+                            context = ' '.join(text_parts[start:end])
+                            if len(context) > 5 and len(context) < 100:
+                                return context.strip()
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Failed to extract company name for {symbol}: {e}")
+        return None
+
+def parse_search_results(soup, target_symbol: str) -> Optional[Dict[str, str]]:
+    """解析搜索结果页面"""
+    try:
+        # 查找搜索结果表格或列表
+        # 根据实际页面结构调整选择器
+        
+        # 方法1: 查找包含股票代码的链接
+        links = soup.find_all("a", href=re.compile(r"SignalPage.*Ticker=", re.I))
+        
+        for link in links:
+            href = link.get("href", "")
+            link_text = link.get_text().strip()
+            
+            # 检查链接是否包含目标股票代码
+            if target_symbol.upper() in href.upper() or target_symbol.upper() in link_text.upper():
+                # 尝试提取公司名称
+                # 搜索结果通常格式如 "AAPL - Apple Inc."
+                if " - " in link_text:
+                    parts = link_text.split(" - ")
+                    if len(parts) >= 2:
+                        return {
+                            "symbol": target_symbol,
+                            "name": parts[1].strip()
+                        }
+                
+                # 或者从父元素中查找名称
+                parent = link.find_parent()
+                if parent:
+                    parent_text = parent.get_text()
+                    if target_symbol in parent_text:
+                        # 简单的名称提取逻辑
+                        clean_text = parent_text.replace(target_symbol, "").strip()
+                        if clean_text and len(clean_text) > 3:
+                            return {
+                                "symbol": target_symbol,
+                                "name": clean_text[:100]
+                            }
+        
+        # 方法2: 查找表格行
+        rows = soup.find_all("tr")
+        for row in rows:
+            row_text = row.get_text()
+            if target_symbol.upper() in row_text.upper():
+                cells = row.find_all(["td", "th"])
+                if len(cells) >= 2:
+                    # 通常第一列是代码，第二列是名称
+                    symbol_cell = cells[0].get_text().strip()
+                    name_cell = cells[1].get_text().strip()
+                    
+                    if target_symbol.upper() in symbol_cell.upper():
+                        return {
+                            "symbol": target_symbol,
+                            "name": name_cell
+                        }
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Failed to parse search results for {target_symbol}: {e}")
+        return None

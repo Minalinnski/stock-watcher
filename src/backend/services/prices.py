@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # 缓存和限流控制
 _last_request_time = {}
 _request_cache = {}
-MIN_REQUEST_INTERVAL = 2  # 最少2秒间隔
+MIN_REQUEST_INTERVAL = 5  # 增加到5秒间隔
 
 def _wait_for_rate_limit(symbol: str):
     """确保请求间隔，避免频率限制"""
@@ -21,37 +21,33 @@ def _wait_for_rate_limit(symbol: str):
     _last_request_time[symbol] = time.time()
 
 def validate_symbol(symbol: str) -> bool:
-    """验证股票代码是否有效"""
+    """使用AmericanBulls验证股票代码"""
     try:
-        symbol = symbol.upper().strip()
-        if not symbol or len(symbol) > 10:
-            return False
-        
-        # 简单的格式检查
-        if not symbol.isalnum() and '.' not in symbol:
-            return False
-            
-        # 尝试获取基本信息验证
-        _wait_for_rate_limit(symbol)
-        t = yf.Ticker(symbol)
-        info = t.fast_info
-        
-        # 检查是否有有效的价格数据
-        if info.last_price is not None and info.last_price > 0:
-            return True
-        return False
+        from .americanbulls import validate_symbol_and_get_name
+        result = validate_symbol_and_get_name(symbol)
+        return result.get("valid", False)
     except Exception as e:
         logger.warning(f"Symbol validation failed for {symbol}: {e}")
         return False
+
+def get_symbol_info(symbol: str) -> Dict[str, Any]:
+    """获取股票代码信息（包含公司名称）"""
+    try:
+        from .americanbulls import validate_symbol_and_get_name
+        return validate_symbol_and_get_name(symbol)
+    except Exception as e:
+        logger.error(f"Failed to get symbol info for {symbol}: {e}")
+        return {"valid": False, "symbol": symbol, "name": None}
 
 def get_quote(symbol: str) -> Dict[str, Any]:
     """获取股票报价，带缓存和错误处理"""
     symbol = symbol.upper()
     
-    # 检查缓存（5分钟有效期）
+    # 检查缓存（30分钟有效期，大幅延长避免频率限制）
     cache_key = f"quote_{symbol}"
     cached = _request_cache.get(cache_key)
-    if cached and (time.time() - cached['timestamp']) < 300:  # 5分钟缓存
+    if cached and (time.time() - cached['timestamp']) < 1800:  # 30分钟缓存
+        logger.info(f"Using cached quote for {symbol}")
         return cached['data']
     
     try:
@@ -107,10 +103,11 @@ def get_intraday_points(symbol: str, period="1d", interval="5m") -> Dict[str, An
     """获取图表数据，使用更宽松的间隔"""
     symbol = symbol.upper()
     
-    # 检查缓存（10分钟有效期）
+    # 检查缓存（2小时有效期，大幅延长避免频率限制）
     cache_key = f"chart_{symbol}_{period}_{interval}"
     cached = _request_cache.get(cache_key)
-    if cached and (time.time() - cached['timestamp']) < 600:  # 10分钟缓存
+    if cached and (time.time() - cached['timestamp']) < 7200:  # 2小时缓存
+        logger.info(f"Using cached chart for {symbol}")
         return cached['data']
     
     try:

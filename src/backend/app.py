@@ -4,11 +4,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, delete, update, func
-from db import Base, engine, SessionLocal
-from models import WatchItem, ABSignalCache, StockQuoteCache
-from schemas import WatchCreate, WatchItemOut, ABSignalOut, QuoteOut, ChartOut
-from services.prices import get_quote, get_intraday_points, validate_symbol
-from scheduler import create_scheduler
+from .db import Base, engine, SessionLocal
+from .models import WatchItem, ABSignalCache, StockQuoteCache
+from .schemas import WatchCreate, WatchItemOut, ABSignalOut, QuoteOut, ChartOut
+from .services.prices import get_quote, get_intraday_points, validate_symbol
+from .scheduler import create_scheduler
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -109,7 +109,7 @@ def get_ab(symbol: str):
         obj = db.execute(select(ABSignalCache).where(ABSignalCache.symbol==symbol.upper())).scalar_one_or_none()
         if not obj:
             # 未缓存则尝试即时抓一次
-            from services.americanbulls import fetch_ab_for_symbol
+            from .services.americanbulls import fetch_ab_for_symbol
             data = fetch_ab_for_symbol(symbol)
             obj = ABSignalCache(
                 symbol=symbol.upper(), 

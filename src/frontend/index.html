@@ -14,19 +14,20 @@
       <input id="add-symbol" placeholder="添加股票代码，如 AAPL" />
       <button type="submit">添加</button>
     </form>
-    <small>每<span id="interval-min">30</span>分钟后台刷新 AB 信号</small>
+    <small>📊 股价每10分钟更新 | 🤖 AB信号每60分钟更新</small>
   </header>
 
   <main class="container">
     <table id="table">
       <thead>
         <tr>
-          <th>Symbol</th>
-          <th>Name</th>
+          <th>股票信息</th>
           <th>现价</th>
-          <th>今日%</th>
-          <th>迷你曲线</th>
-          <th>AB 建议 / 最近两次操作</th>
+          <th>今日变化</th>
+          <th>成交量</th>
+          <th>走势图</th>
+          <th>AB 信号分析</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
@@ -53,10 +54,6 @@
     </div>
   </div>
 
-  <script>
-    // 将 .env 中间隔显示到 UI（可选）
-    document.getElementById('interval-min').textContent = '30';
-  </script>
   <script src="assets/app.js"></script>
 </body>
 </html>

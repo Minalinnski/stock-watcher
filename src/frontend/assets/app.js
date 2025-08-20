@@ -1,4 +1,4 @@
-const API = location.origin.replace(/:\d+$/, ':8888'); // 若前后端同机：后端跑在 8566
+const API = location.origin; // 前后端一体化，同一端口
 const tbody = document.getElementById('tbody');
 const modal = document.getElementById('modal');
 const closeBtn = document.getElementById('modal-close');
@@ -21,43 +21,124 @@ async function loadWatch() {
   for (const item of list) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><b>${item.symbol}</b></td>
-      <td>${item.name || ''}</td>
+      <td class="symbol-cell">
+        <div class="symbol-info">
+          <b>${item.symbol}</b>
+          <small>${item.name || ''}</small>
+        </div>
+      </td>
       <td class="price">-</td>
       <td class="chg">-</td>
+      <td class="volume">-</td>
       <td><canvas class="spark"></canvas></td>
-      <td class="ab">加载中…</td>
+      <td class="ab">
+        <div class="ab-content">
+          <span class="suggestion">加载中…</span>
+          <div class="signals-history"></div>
+        </div>
+      </td>
+      <td class="actions">
+        <button class="btn-remove" onclick="removeStock('${item.symbol}')" title="删除">×</button>
+      </td>
     `;
     tbody.appendChild(tr);
 
-    // 价格 + 涨跌
+    // 价格 + 涨跌 + 成交量
     jget(`/api/quote/${item.symbol}`).then(q => {
-      tr.querySelector('.price').textContent = q.price ?? '-';
-      tr.querySelector('.chg').innerHTML = q.change==null ? '-' : `<span class="${pctClass(q.change)}">${q.change}%</span>`;
+      tr.querySelector('.price').textContent = q.price ? `$${q.price}` : '-';
+      const changeCell = tr.querySelector('.chg');
+      if (q.change !== null) {
+        changeCell.innerHTML = `<span class="${pctClass(q.change)}">${q.change > 0 ? '+' : ''}${q.change}%</span>`;
+      } else {
+        changeCell.textContent = '-';
+      }
+      tr.querySelector('.volume').textContent = q.volume ? formatVolume(q.volume) : '-';
+    }).catch(() => {
+      tr.querySelector('.price').textContent = '错误';
     });
 
     // 迷你曲线
     const canvas = tr.querySelector('.spark');
     const ctx = canvas.getContext('2d');
-    jget(`/api/chart/${item.symbol}?period=1d&interval=1m`).then(ch => {
-      const labels = ch.points.map(p=>p.t);
-      const data = ch.points.map(p=>p.p);
-      new Chart(ctx, {
-        type:'line',
-        data:{ labels, datasets:[{ data, borderWidth:1, pointRadius:0, tension:0.3 }]},
-        options:{ responsive:false, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false}} }
-      });
+    jget(`/api/chart/${item.symbol}?period=1d&interval=5m`).then(ch => {
+      if (ch.points && ch.points.length > 0) {
+        const labels = ch.points.map(p=>p.t);
+        const data = ch.points.map(p=>p.p);
+        new Chart(ctx, {
+          type:'line',
+          data:{ labels, datasets:[{ data, borderColor:'#4CAF50', borderWidth:1, pointRadius:0, tension:0.3, fill:false }]},
+          options:{ responsive:false, plugins:{legend:{display:false}}, scales:{x:{display:false}, y:{display:false}} }
+        });
+      }
+    }).catch(() => {
+      // 图表加载失败，显示占位符
+      ctx.fillStyle = '#ddd';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     });
 
-    // AB 信号（含最近两次）
+    // AB 信号
     jget(`/api/ab/${item.symbol}`).then(ab => {
-      const two = (ab.last_two_actions||[]).map(x=>`${x.date} ${x.signal}`).join(' / ');
-      const sugg = ab.suggestion ? `<span class="badge">${ab.suggestion}</span>` : '';
-      tr.querySelector('.ab').innerHTML = `${sugg} ${two || ''}`;
-      // 点击整行弹窗
+      const suggestionSpan = tr.querySelector('.suggestion');
+      const historyDiv = tr.querySelector('.signals-history');
+      
+      // 显示当前建议
+      if (ab.suggestion) {
+        suggestionSpan.innerHTML = `<span class="badge ${getBadgeClass(ab.suggestion)}">${ab.suggestion}</span>`;
+      } else {
+        suggestionSpan.textContent = '无信号';
+      }
+      
+      // 显示历史信号
+      if (ab.signal_history && ab.signal_history.length > 0) {
+        const historyHtml = ab.signal_history.slice(0, 3).map(sig => 
+          `<small class="signal-item">${sig.date} ${sig.signal}</small>`
+        ).join('');
+        historyDiv.innerHTML = historyHtml;
+      } else if (ab.last_two_actions && ab.last_two_actions.length > 0) {
+        const historyHtml = ab.last_two_actions.map(sig => 
+          `<small class="signal-item">${sig.date} ${sig.signal}</small>`
+        ).join('');
+        historyDiv.innerHTML = historyHtml;
+      }
+      
+      // 点击行打开详情
       tr.style.cursor = 'pointer';
-      tr.addEventListener('click', () => openModal(item.symbol));
+      tr.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('btn-remove')) {
+          openModal(item.symbol);
+        }
+      });
+    }).catch(() => {
+      tr.querySelector('.suggestion').textContent = '加载失败';
     });
+  }
+}
+
+function formatVolume(volume) {
+  if (volume >= 1e9) return (volume / 1e9).toFixed(1) + 'B';
+  if (volume >= 1e6) return (volume / 1e6).toFixed(1) + 'M';
+  if (volume >= 1e3) return (volume / 1e3).toFixed(1) + 'K';
+  return volume.toString();
+}
+
+function getBadgeClass(suggestion) {
+  switch(suggestion) {
+    case 'BUY': return 'badge-buy';
+    case 'SELL': return 'badge-sell';
+    case 'SHORT': return 'badge-short';
+    case 'STAY LONG': return 'badge-long';
+    default: return 'badge-neutral';
+  }
+}
+
+async function removeStock(symbol) {
+  if (confirm(`确定要从监控列表中删除 ${symbol} 吗？`)) {
+    try {
+      await jdel(`/api/watchlist/${symbol}`);
+      loadWatch(); // 重新加载列表
+    } catch (error) {
+      alert('删除失败，请稍后重试');
+    }
   }
 }
 

@@ -1,0 +1,21 @@
+body { font-family: ui-sans-serif, system-ui; margin: 0; color: #222; background:#fafafa; }
+.topbar { display:flex; gap:16px; align-items:center; padding:12px 16px; background:#111; color:#fff; }
+.topbar h1 { font-size: 18px; margin:0; }
+.topbar form { display:flex; gap:8px; }
+.topbar input { padding:6px 8px; border-radius:6px; border:1px solid #333; background:#fff; }
+.topbar button { padding:6px 10px; border-radius:6px; border:0; background:#2b6cb0; color:#fff; cursor:pointer; }
+.container { padding: 16px; }
+table { width:100%; border-collapse:collapse; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.05); }
+th, td { padding:10px; border-bottom:1px solid #eee; text-align:left; }
+tr:hover { background:#f8fbff; }
+.badge { padding:2px 6px; border-radius:999px; background:#eee; font-size:12px; }
+.up { color:#0a8f3c; }
+.down { color:#c7162b; }
+.spark { width:140px; height:40px; }
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; }
+.modal.hidden { display:none; }
+.modal-card { background:#fff; width:min(920px,92vw); padding:16px; border-radius:12px; position:relative; }
+.modal-card #modal-close { position:absolute; right:8px; top:8px; border:0; background:#f3f3f3; width:32px; height:32px; border-radius:8px; cursor:pointer; }
+.grid { display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; }
+.details { font-size:14px; line-height:1.5; }
+.hint { color:#666; font-size:12px; }

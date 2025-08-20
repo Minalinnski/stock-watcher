@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>AB Watch Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="assets/styles.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>AmericanBulls Watch Dashboard</h1>
+    <form id="add-form">
+      <input id="add-symbol" placeholder="添加股票代码，如 AAPL" />
+      <button type="submit">添加</button>
+    </form>
+    <small>每<span id="interval-min">30</span>分钟后台刷新 AB 信号</small>
+  </header>
+
+  <main class="container">
+    <table id="table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Name</th>
+          <th>现价</th>
+          <th>今日%</th>
+          <th>迷你曲线</th>
+          <th>AB 建议 / 最近两次操作</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </main>
+
+  <!-- 弹窗 -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-card">
+      <button id="modal-close">×</button>
+      <h2 id="m-title"></h2>
+      <div class="grid">
+        <div>
+          <canvas id="big-chart" height="180"></canvas>
+        </div>
+        <div class="details">
+          <p id="m-quote"></p>
+          <p><b>AB Suggestion:</b> <span id="m-sugg"></span></p>
+          <p><b>Last two:</b> <span id="m-two"></span></p>
+          <p id="m-summary"></p>
+          <p class="hint">来源：americanbulls.com，个股页 *Signal Update* & *Signal History*。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 将 .env 中间隔显示到 UI（可选）
+    document.getElementById('interval-min').textContent = '30';
+  </script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
